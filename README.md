@@ -652,3 +652,106 @@ Run this command (stop the app first, and start again afterwards):
 ```bash
 npm run rebase:deployed
 ```
+
+
+# Meine Schritte:
+
+## gibt die öffentliche IP-Adresse der VM aus
+az vm show --resource-group rg-librechat-intern --name vmlibrechatwbai -d --query publicIps -o tsv
+
+## Berechtigungen des privaten Schlüssels korrigieren
+chmod 600 ~/.ssh/vmlibrechatwbai_key.pem
+
+## ssh verbindung zur vm herstellen
+ssh -i ~/.ssh/vmlibrechatwbai_key.pem azureuser@<ip-adresse>
+
+## update und install docker
+sudo apt update
+sudo apt install apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release
+
+## docker repository hinzufügen
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+
+## docker installieren
+sudo apt install docker-ce
+sudo usermod -aG docker $USER
+
+## reboot
+sudo reboot
+
+## docker-compose installieren
+sudo curl -L https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-composecd 
+
+## git, nodejs und npm installieren
+sudo apt install git nodejs npm
+
+## clone the repository
+git clone https://github.com/WEBUILDAI/LibreChat-wbai.git
+
+## update the domain in the .env file
+DOMAIN_CLIENT=https://librechat-wbai.germanywestcentral.cloudapp.azure.com
+DOMAIN_SERVER=https://librechat-wbai.germanywestcentral.cloudapp.azure.com
+
+## In azure portal in der puplic adresse die domain anlegen und die ip adresse zuweisen
+
+# In Azure innerhalb der Network Security Group die Regel für den eingehenden Datenverkehr für die Ports 80 und 443 freigeben (inbound ports)
+
+AllowAnyCustom3080Inbound 443: Allow all https
+(AllowAnyHTTPInbound 80: Allow all http) TODO: wahrscheinlich nicht nötig weil wird auf https umgeleitet
+
+# Install Certbot:
+sudo apt-get install certbot python3-certbot-nginx
+
+# Obtain the Certificate:
+Run the following command to obtain and install the certificate automatically for Nginx:
+sudo certbot --nginx
+Follow the on-screen instructions. Certbot will ask for information and complete the validation process.
+Once successful, Certbot will store your certificate files.
+- hier ist wichtig, dass die domain ohne http oder https angegeben wird sowie ohne backslash am ende "librechat-wbai.germanywestcentral.cloudapp.azure.com"
+- ebenfalls ist es nötig bei ängeren domains innerhalb der nginx.conf im http block die bulk size anzupassen 
+```bash
+http {
+    server_names_hash_bucket_size 128;
+
+    # evtl. vorhandene weitere Direktiven
+    ...
+}
+```
+
+# in nginx.conf den servername angeben (in der SSL section)
+```bash
+server_name librechat-wbai.germanywestcentral.cloudapp.azure.com;
+```
+
+## in deploy_compose.yml die certifikate mounten
+
+  client:
+    image: nginx:1.27.0-alpine
+    container_name: LibreChat-NGINX
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - api
+    restart: always
+    volumes:
+      - ./client/nginx.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt/live/librechat-wbai.germanywestcentral.cloudapp.azure.com/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      - /etc/letsencrypt/live/librechat-wbai.germanywestcentral.cloudapp.azure.com/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+      - /etc/letsencrypt/live/librechat-wbai.germanywestcentral.cloudapp.azure.com/chain.pem:/etc/nginx/ssl/chain.pem:ro
+
+## in client/nginx.conf
+- Non-SSL section auskommentieren
+- SSL section einkommentieren
+- zwei ssl certificate ersetzen (ssl_certificate /etc/nginx/ssl/nginx.crt; ssl_certificate_key /etc/nginx/ssl/nginx.key;) durch ssl_certificate /etc/nginx/ssl/fullchain.pem; ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+- (Wichtig, da sonst nginx container failed beim starten und alle certificate nicht gesetzt werden können) ssl_dhparam /etc/nginx/ssl/dhparam; auskommentiert! (TODO:sollte gemountet werden)
+
+
+## TODO:
+- wie kann ssl_dhparam /etc/nginx/ssl/dhparam; gemountet werden? Wo bekommt man dieses certificate?
+- Setup für login über EntraID
+- muss die inbound nsg für AllowAnyHTTPInbound (80: Allow all http) überhaupt verwendet werden?
+- RAG API muss noch eingerichtet werden

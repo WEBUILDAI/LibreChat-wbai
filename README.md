@@ -200,3 +200,455 @@ We thank [Locize](https://locize.com) for their translation management tools tha
     <img src="https://github.com/user-attachments/assets/d6b70894-6064-475e-bb65-92a9e23e0077" alt="Locize Logo" height="50">
   </a>
 </p>
+
+
+<a href="https://gpt.we-build-ai.de">
+<img src="client/public/assets/logo.svg" height="64">
+</a>
+</br>
+<h3>
+Deploying <a href="https://gpt.we-build-ai.de">LibreChat</a> on Azure (Virtual Machine)
+</h3>
+
+The following instructions are primarily derived from the [LibreChat Documentation](https://www.librechat.ai/docs/). If you encounter any issues, you will likely find a solution in the documentation.
+
+---
+
+</br>
+
+## 0. Setup for local usage
+
+### a. Install Docker
+
+```bash
+brew install docker
+```
+
+### b. Install Git
+```bash
+brew install git
+```
+
+### c. Clone the Librechat repository
+
+```bash
+git clone https://github.com/we-build-ai-consulting/LibreChat.git
+
+cd LibreChat/ 
+```
+
+### d. Copy the .env.example file to .env
+
+```bash
+cp .env.example .env
+```
+
+### e. Update the .env file
+
+```bash
+nano .env
+```
+
+Replace the following values in your `.env` file to ensure they differ from the default values. Refer to the LibreChat documentation for guidance [here](https://www.librechat.ai/docs/remote/docker_linux#:~:text=However%2C%20it%E2%80%99s%20highly%20recommended%20you%20adjust%20the%20%E2%80%9Csecret%E2%80%9D%20values).
+
+#### Required Variables
+- **CREDS_IV**: Must be a 16-byte IV (32 characters in hex)
+```bash
+CREDS_IV=e2341419ec3dd3d19b13a1a87fafcbfb
+```
+
+- **CREDS_KEY**: Must be 32-byte keys (64 characters in hex)
+```bash
+CREDS_KEY=f34be427ebb29de8d88c107a71546019685ed8b241d8f2ed00c3df97ad2566f0
+```
+
+- **JWT_SECRET**: 
+```bash
+JWT_SECRET=16f8c0ef4a5d391b26034086c628469d3f9f497f08163ab9b40137092f2909ef
+```
+
+- **JWT_REFRESH_SECRET**: 
+```bash
+JWT_REFRESH_SECRET=eaa5191f2914e30b9387fd84e254e4ba6fc51b4654968a9b0803b456a54b8418
+```
+
+### f. Insert Azure OpenAI Resource Details
+Insert the API key from your Azure OpenAI Resource into the `.env` file and replace the resource name with yours:
+```bash
+# GPT Configuration
+AZURE_OAI_RG=YOUR AZURE OPENAI RESOURCE GROUP
+AZURE_OAI_API_KEY=YOUR AZURE OPENAI KEY
+AZURE_OAI_RESOURCE=YOUR AZURE OPENAI RESOURCE NAME (the resource name, not the resource url)
+AZURE_OAI_API_VERSION=YOUR AZURE OPENAI API VERSION (e.g. 2024-06-01)
+```
+
+### g. Change the librechat.example.yaml to librechat.yaml and update the librechat.yaml file
+```yaml
+endpoints:
+  azureOpenAI:
+      titleModel: "gpt-4o-mini"
+      titleConvo: true
+      titleMethod: "completion"
+      plugins: true
+      assistans: false
+      summarize: false
+      groups:
+        - group: "${AZURE_OAI_RG}"
+          apiKey: "${AZURE_OAI_API_KEY}"
+          instanceName: "${AZURE_OAI_RESOURCE}"
+          version: "${AZURE_OAI_API_VERSION}"
+          models:
+            gpt-4o:
+              deploymentName: "gpt-4o"
+            gpt-4o-mini:
+              deploymentName: "gpt-4o-mini"
+```
+Under models, you can add more models if you want to. Important: only add models that are available in your Azure OpenAI Resource.
+
+### h. Add the librechat.yaml to the docker-compose.yml file to the mount volume
+```bash
+services:
+  api:
+    container_name: LibreChat
+    ports:
+      - "${PORT}:${PORT}"
+        ...
+    environment:
+        ...
+    volumes:
+        ...
+      - ./librechat.yaml:/app/librechat.yaml
+```
+
+### i. Start docker compose
+```bash
+docker compose up -d
+```
+#### If you have changes and want to restart the app, you can use the following command:
+```bash
+docker compose down
+docker compose up -d
+```
+
+
+### i. Open the app in your browser
+```bash
+http://localhost:3080
+```
+
+
+## 1. Create a Virtual Machine
+
+### Recommended Setup:
+```
+    VM Size:    B2s
+    Type:       General purpose
+    vCPUs:      2
+    RAM (GiB):  4
+    
+    Estimated Cost:  $35.04 / Month
+
+    Operating System: Linux (Ubuntu 24.04)
+```
+</br>
+
+## 2. Set Up the Virtual Machine - Installing Docker and Other Dependencies
+
+Log into your virtual machine and follow the steps below to set up the environment.
+
+### Step 1: Update Package List and Install Required Docker Dependencies
+```bash
+sudo apt update
+sudo apt install apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release
+```
+
+### Step 2: Add Docker Repository to APT Sources
+```bash
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+```
+
+### Step 3: Install Docker
+```bash
+sudo apt install docker-ce
+
+sudo usermod -aG docker $USER
+```
+
+### Step 4: Reboot the System
+```bash
+sudo reboot
+```
+
+### Step 5: Install the Latest Version of Docker Compose
+```bash
+sudo curl -L https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+
+sudo chmod +x /usr/local/bin/docker-composecd 
+```
+
+### Step 6: Install Git and npm
+```bash
+sudo apt install git nodejs npm
+```
+
+---
+
+## 3. Setup LibreChat
+
+### Step 1: Clone the Repository
+Clone this repository to your workspace:
+```bash
+git clone https://github.com/we-build-ai-consulting/LibreChat.git
+
+cd LibreChat/
+```
+
+You might need to switch the branch to `we-build-ai`
+```bash
+git checkout we-build-ai
+```
+
+### Step 2: Copy the Environment File
+Copy the `.example.env` file to `.env`:
+```bash
+cp .env.example .env
+```
+
+### Step 3: Update Environment Variables
+Open the `.env` file for editing:
+```bash
+nano .env
+```
+
+Replace the following values in your `.env` file to ensure they differ from the default values. Refer to the LibreChat documentation for guidance [here](https://www.librechat.ai/docs/remote/docker_linux#:~:text=However%2C%20it%E2%80%99s%20highly%20recommended%20you%20adjust%20the%20%E2%80%9Csecret%E2%80%9D%20values).
+
+#### Required Variables
+- **CREDS_IV**: Must be a 16-byte IV (32 characters in hex)
+```bash
+CREDS_IV=e2341419ec3dd3d19b13a1a87fafcbfb
+```
+
+- **CREDS_KEY**: Must be 32-byte keys (64 characters in hex)
+```bash
+CREDS_KEY=f34be427ebb29de8d88c107a71546019685ed8b241d8f2ed00c3df97ad2566f0
+```
+
+- **JWT_SECRET**: 
+```bash
+JWT_SECRET=16f8c0ef4a5d391b26034086c628469d3f9f497f08163ab9b40137092f2909ef
+```
+
+- **JWT_REFRESH_SECRET**: 
+```bash
+JWT_REFRESH_SECRET=eaa5191f2914e30b9387fd84e254e4ba6fc51b4654968a9b0803b456a54b8418
+```
+
+### Step 4: Insert Azure OpenAI Resource Details
+Insert the API key from your Azure OpenAI Resource into the `.env` file and replace the resource name with yours:
+```bash
+# GPT Configuration
+AZURE_OAI_API_KEY=YOUR AZURE OPENAI KEY
+AZURE_OAI_RESOURCE=YOUR AZURE OPENAI RESOURCE NAME
+```
+
+If you want to use the LibreChat RAG-API (uploading and chatting with documants), you need to edit/add the following configuration in your `.env` file:
+```bash
+# Embeddings Configuration for RAG-API
+EMBEDDINGS_PROVIDER=azure
+EMBEDDINGS_MODEL=text-embedding-ada-002
+# EMBEDDINGS_MODEL=text-embedding-3-small
+RAG_AZURE_OPENAI_API_KEY=YOUR AZURE OPENAI KEY
+RAG_AZURE_OPENAI_ENDPOINT=https://YOUR AZURE OPENAI RESOURCE NAME.openai.azure.com
+RAG_AZURE_OPENAI_API_VERSION=2024-02-15-preview
+```
+
+
+### Step 5: Update Model Deployment Details
+You may need to replace the model deployment details to fit your deployments in `librechat.yaml`:
+```yaml
+endpoints:
+  azureOpenAI:
+      titleModel: "gpt-4o-mini"
+      titleConvo: true
+      titleMethod: "completion"
+      plugins: true
+      assistans: false
+      summarize: false
+      groups:
+        - group: "rg-germany-west-central"
+          apiKey: "${AZURE_OAI_API_KEY}"
+          instanceName: "${AZURE_OAI_RESOURCE}"
+          version: "${AZURE_OAI_API_VERSION}"
+          models:
+            gpt-4o:
+              deploymentName: "gpt-4o"
+            gpt-4o-mini:
+              deploymentName: "gpt-4o-mini"
+```
+</br>
+
+### Step 6: Update Domain Information
+If you are using a domain that is not `gpt.we-build-ai.de`, replace `gpt.we-build-ai.de` with your domain inside `.env`:
+```.env
+DOMAIN_CLIENT=https://gpt.we-build-ai.de
+DOMAIN_SERVER=https://gpt.we-build-ai.de
+```
+
+---
+
+
+## 4. Setting up SSL Encryption (HTTPS) and Connecting the Service to Your (Sub)domain
+
+Before proceeding with certificate acquisition, ensure that your domain points to your cloud server’s IP address. This step is foundational and must precede SSL certificate setup due to the time DNS records may require to propagate globally.
+
+### Steps to Point Your Domain:
+1. Log in to your domain registrar’s control panel.
+2. Navigate to DNS settings.
+3. Create an A record pointing your domain to the IP address of your cloud server.
+4. Wait for the DNS changes to propagate globally (you can check by pinging your domain: `ping your_domain.com`).
+
+
+### Obtain an SSL/TLS Certificate
+To secure your LibreChat application with HTTPS, you’ll need an SSL/TLS certificate. Let’s Encrypt offers free certificates.
+
+#### Stop Container Instances
+
+Before obtaining the SSL/TLS certificate, you need to stop the docker container instances running on your VM:
+
+```bash
+docker compose down
+```
+
+Check if there are no instances running any more:
+
+```bash
+docker ps
+```
+
+If there are still instances running, kill them:
+
+```bash
+docker stop <containerid>
+```
+
+#### Install Certbot:
+```bash
+sudo apt-get install certbot python3-certbot-nginx
+```
+
+#### Obtain the Certificate:
+- Run the following command to obtain and install the certificate automatically for Nginx:
+```bash
+sudo certbot --nginx
+```
+- Follow the on-screen instructions. Certbot will ask for information and complete the validation process.
+- Once successful, Certbot will store your certificate files.
+
+### If You Are Using a Domain Other Than `gpt.we-build-ai.de`:
+Replace `gpt.we-build-ai.de` with your domain inside `./client/nginx.conf` and `deploy-compose.yml`.
+For the `./client/nginx.conf` file, follow the instructions given in the file itself comment/uncomment respective No-SSL and SSL sections. The domain needs to be replaced in two places here:
+
+```bash
+server_name gpt.we-build-ai.de;
+server_name gpt.we-build-ai.de;
+```
+
+The domain needs to be replaced in three places in `deploy-compose.yml`:
+
+```bash
+- /etc/letsencrypt/live/gpt.we-build-ai.de/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+- /etc/letsencrypt/live/gpt.we-build-ai.de/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+- /etc/letsencrypt/live/gpt.we-build-ai.de/chain.pem:/etc/nginx/ssl/chain.pem:ro
+```
+
+### Post-Certificate Installation Steps
+After obtaining and installing your SSL certificate with Certbot, you may encounter an issue where your domain displays the default Nginx welcome page instead of your intended application. This can occur if the Nginx default configuration overrides or conflicts with the configuration necessary to serve your Docker-based application. To resolve this, follow these steps:
+
+#### Stop and Remove Default Nginx
+
+```bash
+sudo systemctl stop nginx
+sudo apt-get remove nginx nginx-common
+sudo apt-get purge nginx nginx-common
+```
+
+#### Kill Any Nginx Processes
+
+```bash
+ps aux | grep nginx
+sudo pkill nginx
+```
+
+Ensure that Nginx has been completely removed by checking the configuration directory:
+
+```bash
+ls /etc/nginx
+```
+
+If the directory is empty or does not exist, Nginx has been successfully uninstalled.
+
+
+---
+
+## Setup EntraID Login
+Follow the documentation in [LibreChat OAuth2-OIDC Azure Configuration](https://www.librechat.ai/docs/configuration/authentication/OAuth2-OIDC/azure).
+
+At the end, you should have filled the following values in your `.env` file:
+```.env
+OPENID_CLIENT_ID=Your Application (client) ID
+OPENID_CLIENT_SECRET=Your client secret
+OPENID_ISSUER=https://login.microsoft.com/Your Directory (tenant ID)/v2.0/
+OPENID_SESSION_SECRET=Any random string
+```
+
+## Setup Inbound Ports on the Virtual Machine
+Add an inbound port rule for port 80 and 443 to your virtual machine.
+
+
+### Finalize Build and Start LibreChat
+Only if you are currently running any containers (`docker ps`), stop all running instances:
+```bash
+npm run stop:deployed
+```
+
+Build the instances that will be deployed:
+```bash
+npm run rebase:deployed
+```
+
+Start the application:
+```bash
+npm run start:deployed
+```
+
+</br>
+Congratulations! Your app should now be running on your domain.
+
+</br></br></br>
+---
+
+</br></br></br>
+## Overview: Start, Stop, and Rebase the App
+### Start the Docker Containers Powering LibreChat
+```bash
+npm run start:deployed
+```
+
+---
+
+### Stop All Running Docker Containers
+```bash
+npm run stop:deployed
+```
+
+---
+
+### If You Have Made Changes to `deploy-compose.yml`
+Run this command (stop the app first, and start again afterwards):
+```bash
+npm run rebase:deployed
+```

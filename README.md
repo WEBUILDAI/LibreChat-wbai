@@ -750,8 +750,29 @@ server_name librechat-wbai.germanywestcentral.cloudapp.azure.com;
 - (Wichtig, da sonst nginx container failed beim starten und alle certificate nicht gesetzt werden können) ssl_dhparam /etc/nginx/ssl/dhparam; auskommentiert! (TODO:sollte gemountet werden)
 
 
+## OPENID (anleitung auf Librechat docs ist gut, aber folgendes ist zu beachten): 
+- keine gruppen angeben
+- .env anpassungen: 
+ALLOW_EMAIL_LOGIN=false (vorher true)
+ALLOW_REGISTRATION=false (vorher true)
+ALLOW_SOCIAL_LOGIN=true (vorher false)
+ALLOW_SOCIAL_REGISTRATION=false
+ALLOW_PASSWORD_RESET=false
+# ALLOW_ACCOUNT_DELETION=true # note: enabled by default if omitted/commented out
+ALLOW_UNVERIFIED_EMAIL_LOGIN=false (vorher true)
+
+zudem: 
+- librechat.yml: 
+  - registraction -> socialLogins: ['openid'] (github etc. entfernen)
 ## TODO:
 - wie kann ssl_dhparam /etc/nginx/ssl/dhparam; gemountet werden? Wo bekommt man dieses certificate?
 - Setup für login über EntraID
 - muss die inbound nsg für AllowAnyHTTPInbound (80: Allow all http) überhaupt verwendet werden?
 - RAG API muss noch eingerichtet werden
+- certbot lkäuft nicht mehr, da nginx komplett entfernt und gestoppt wurde -> herausfinden, wie man das korrekt aufsetzt!
+
+# angezeigte modelle: 
+- .env: 
+  - ENDPOINTS=azureOpenAI (ansonsten werden auch grok etc. angezeigt)
+- librechat.yml: 
+  nur noch azureOPenAI als custom endpoint angeben
